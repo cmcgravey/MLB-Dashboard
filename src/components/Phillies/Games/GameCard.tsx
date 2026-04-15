@@ -1,3 +1,6 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -13,6 +16,7 @@ interface GameCardProps {
 }
 
 export function GameCard({ game }: GameCardProps) {
+  const router = useRouter();
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -45,14 +49,20 @@ export function GameCard({ game }: GameCardProps) {
     : game.awayScore > game.homeScore;
   const status = getGameStatus(game.status);
 
+  const handleNavigateToGame = () => {
+    router.push(`/game/${game.id}`);
+  };
+
   return (
     <Card
+      onClick={handleNavigateToGame}
       sx={{
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
         borderLeft: `5px solid ${won ? '#CC3433' : '#999'}`,
         transition: 'transform 0.2s, box-shadow 0.2s',
+        cursor: 'pointer',
         '&:hover': {
           transform: 'translateY(-4px)',
           boxShadow: 3,
