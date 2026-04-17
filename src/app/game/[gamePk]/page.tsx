@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import {
   Container,
@@ -11,21 +11,23 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getGameBoxScore } from '@/lib/mlb';
+import { useGame } from '@/context/GameContext';
 import type { GameBoxScore } from '@/types';
 import { GameDetailsHeader } from '@/components/Game/GameDetailsHeader';
 import { InningsByInning } from '@/components/Game/InningsByInning';
 import { PlayerStatsViewer } from '@/components/Game/PlayerStatsViewer';
 import { LoadingState } from '@/components/Phillies/Common/LoadingState';
+import type { LineScore } from '@/types';
 
 export default function GamePage() {
-  const params = useParams();
   const router = useRouter();
-  const gamePk = params.gamePk as string;
+  const { selectedGame } = useGame();
 
   const [boxScore, setBoxScore] = useState<GameBoxScore | null>(null);
-  const [gameDate, setGameDate] = useState<string>('');
-  const [homeScore, setHomeScore] = useState<number>(0);
-  const [awayScore, setAwayScore] = useState<number>(0);
+  const [gameDate, setGameDate] = useState<string>(selectedGame?.date ?? '');
+  const [homeScore, setHomeScore] = useState<number>(selectedGame?.homeScore ?? 0);
+  const [awayScore, setAwayScore] = useState<number>(selectedGame?.awayScore ?? 0);
+  const [linescore, setLinescore] = useState<LineScore | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,20 +35,22 @@ export default function GamePage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const gamePkNum = parseInt(gamePk, 10);
         
-        // Fetch both boxscore and game data
-        const [boxScoreData, gameData] = await Promise.all([
-          getGameBoxScore(gamePkNum),
-          fetch(`https://statsapi.mlb.com/api/v1/game/${gamePkNum}`, {
-            next: { revalidate: 300 },
-          }).then(res => res.json()),
-        ]);
-
-        setBoxScore(boxScoreData);
-        setGameDate(gameData.gameData?.datetime?.dateTime ?? '');
-        setHomeScore(gameData.liveData?.linescore?.teams?.home?.runs ?? 0);
-        setAwayScore(gameData.liveData?.linescore?.teams?.away?.runs ?? 0);
+        // Use game link from context, which contains all data (boxscore + linescore)
+        if (selectedGame?.gameLink) {
+          // Set game info from context
+          setGameDate(selectedGame.date);
+          setHomeScore(selectedGame.homeScore);
+          setAwayScore(selectedGame.awayScore);
+          
+          // Fetch game data using the link from schedule response
+          const boxScoreData = await getGameBoxScore(selectedGame.gameLink);
+          setBoxScore(boxScoreData);
+          setLinescore(boxScoreData.linescore);
+        } else {
+          // Fallback: if no context, need at least the gamePk
+          throw new Error('Game information not available. Please select a game from the dashboard.');
+        }
         setError(null);
       } catch (err) {
         setError('Failed to load game details. Please try again later.');
@@ -56,10 +60,10 @@ export default function GamePage() {
       }
     };
 
-    if (gamePk) {
+    if (selectedGame?.gameLink) {
       fetchData();
     }
-  }, [gamePk]);
+  }, [selectedGame]);
 
   return (
     <Container maxWidth="lg">
@@ -88,7 +92,7 @@ export default function GamePage() {
             <GameDetailsHeader boxScore={boxScore} gameDate={gameDate} homeScore={homeScore} awayScore={awayScore} />
 
             {/* Inning by Inning */}
-            <InningsByInning gamePk={parseInt(gamePk, 10)} />
+            <InningsByInning linescore={linescore} />
 
             {/* Player Stats Tabs */}
             <PlayerStatsViewer boxScore={boxScore} />

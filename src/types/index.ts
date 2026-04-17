@@ -6,6 +6,7 @@ export interface Game {
   homeScore: number;
   awayScore: number;
   status: string;
+  gameLink: string; // API link from schedule response
 }
 
 export interface Player {
@@ -50,9 +51,30 @@ export interface PlayerStat {
   pitchingOrder?: number;
 }
 
+export interface InningRunData {
+  runs: number;
+  hits: number;
+  errors: number;
+  leftOnBase: number;
+}
+
+export interface InningData {
+  num: number;
+  ordinalNum: string;
+  away: InningRunData;
+  home: InningRunData;
+}
+
+export interface LineScore {
+  currentInning: number;
+  inningState: string;
+  innings: InningData[];
+}
+
 export interface GameBoxScore {
   homeTeam: string;
   awayTeam: string;
   homePlayers: PlayerStat[];
   awayPlayers: PlayerStat[];
+  linescore?: LineScore;
 }

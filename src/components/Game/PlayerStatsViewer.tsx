@@ -193,7 +193,7 @@ function PitchingStatsTable({ players }: { players: PlayerStat[] }) {
                 {player.pitchingHits !== undefined ? player.pitchingHits : '—'}
               </TableCell>
               <TableCell align="center">
-                {player.runs !== undefined ? player.runs : '—'}
+                {player.pitchingRuns !== undefined ? player.pitchingRuns : '—'}
               </TableCell>
               <TableCell align="center">
                 {player.earnedRuns !== undefined ? player.earnedRuns : '—'}

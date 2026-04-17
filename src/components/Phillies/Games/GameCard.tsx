@@ -10,6 +10,7 @@ import {
   Chip,
 } from '@mui/material';
 import type { Game } from '@/types';
+import { useGame } from '@/context/GameContext';
 
 interface GameCardProps {
   game: Game;
@@ -17,6 +18,7 @@ interface GameCardProps {
 
 export function GameCard({ game }: GameCardProps) {
   const router = useRouter();
+  const { setSelectedGame } = useGame();
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -50,6 +52,13 @@ export function GameCard({ game }: GameCardProps) {
   const status = getGameStatus(game.status);
 
   const handleNavigateToGame = () => {
+    setSelectedGame({
+      id: game.id,
+      date: game.date,
+      homeScore: game.homeScore,
+      awayScore: game.awayScore,
+      gameLink: game.gameLink,
+    });
     router.push(`/game/${game.id}`);
   };
 

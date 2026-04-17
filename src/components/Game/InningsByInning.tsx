@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -12,104 +12,37 @@ import {
   TableRow,
   Typography,
   Alert,
-  Skeleton,
-  Stack,
 } from '@mui/material';
-
-interface InningData {
-  away: number | null;
-  home: number | null;
-}
-
-interface LineScore {
-  currentInning: number;
-  inningState: string;
-  innings: InningData[];
-}
-
-interface GameLiveData {
-  linescore: LineScore;
-}
-
-interface GameData {
-  gamePk: number;
-  liveData: GameLiveData;
-}
+import type { LineScore } from '@/types';
 
 interface InningsByInningProps {
-  gamePk: number;
+  linescore?: LineScore;
 }
 
-const BASE_URL = 'https://statsapi.mlb.com/api/v1';
+export function InningsByInning({ linescore }: InningsByInningProps) {
+  const displayData = useMemo(() => {
+    if (!linescore?.innings || linescore.innings.length === 0) {
+      return null;
+    }
 
-export function InningsByInning({ gamePk }: InningsByInningProps) {
-  const [lineScore, setLineScore] = useState<LineScore | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+    return linescore;
+  }, [linescore]);
 
-  useEffect(() => {
-    const fetchLineScore = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${BASE_URL}/game/${gamePk}`, {
-          next: { revalidate: 300 },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch game data: ${response.statusText}`);
-        }
-
-        const data: GameData = await response.json();
-        setLineScore(data.liveData.linescore);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load inning data');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLineScore();
-  }, [gamePk]);
-
-  if (loading) {
-    return (
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Stack spacing={2}>
-          <Skeleton variant="text" height={40} />
-          <Skeleton variant="rectangular" height={120} />
-        </Stack>
-      </Paper>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="warning">
-        {error}
-      </Alert>
-    );
-  }
-
-  if (!lineScore) {
+  if (!displayData) {
     return (
       <Alert severity="info">
-        Game data not yet available
+        Inning-by-inning data not available
       </Alert>
     );
   }
 
-  const { innings, currentInning, inningState } = lineScore;
+  const { innings } = displayData;
 
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
       <Box sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
           Inning by Inning
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {inningState && `Current: ${inningState}`}
         </Typography>
       </Box>
 
@@ -124,8 +57,7 @@ export function InningsByInning({ gamePk }: InningsByInningProps) {
                   align="center"
                   sx={{
                     fontWeight: 600,
-                    backgroundColor:
-                      idx + 1 === currentInning ? '#FFF176' : '#f5f5f5',
+                    backgroundColor: '#f5f5f5',
                   }}
                 >
                   {idx + 1}
@@ -144,17 +76,13 @@ export function InningsByInning({ gamePk }: InningsByInningProps) {
                 <TableCell
                   key={`away-${idx}`}
                   align="center"
-                  sx={{
-                    backgroundColor:
-                      idx + 1 === currentInning ? '#FFF9C4' : 'transparent',
-                  }}
                 >
-                  {inning.away !== null ? inning.away : '-'}
+                  {inning.away?.runs ?? '-'}
                 </TableCell>
               ))}
               <TableCell align="center" sx={{ fontWeight: 500 }}>
                 {innings.reduce(
-                  (sum, inning) => sum + (inning.away ?? 0),
+                  (sum, inning) => sum + (inning.away?.runs ?? 0),
                   0
                 )}
               </TableCell>
@@ -167,17 +95,13 @@ export function InningsByInning({ gamePk }: InningsByInningProps) {
                 <TableCell
                   key={`home-${idx}`}
                   align="center"
-                  sx={{
-                    backgroundColor:
-                      idx + 1 === currentInning ? '#FFF9C4' : 'transparent',
-                  }}
                 >
-                  {inning.home !== null ? inning.home : '-'}
+                  {inning.home?.runs ?? '-'}
                 </TableCell>
               ))}
               <TableCell align="center" sx={{ fontWeight: 500 }}>
                 {innings.reduce(
-                  (sum, inning) => sum + (inning.home ?? 0),
+                  (sum, inning) => sum + (inning.home?.runs ?? 0),
                   0
                 )}
               </TableCell>
@@ -185,12 +109,6 @@ export function InningsByInning({ gamePk }: InningsByInningProps) {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {currentInning && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-          ✓ Current inning: {currentInning}
-        </Typography>
-      )}
     </Paper>
   );
 }

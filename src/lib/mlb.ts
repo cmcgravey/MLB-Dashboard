@@ -1,4 +1,4 @@
-import type { Game, Player, HittingStats, TeamStanding, GameBoxScore, PlayerStat } from '@/types';
+import type { Game, Player, HittingStats, TeamStanding, GameBoxScore, PlayerStat, LineScore, InningData } from '@/types';
 
 const BASE_URL = 'https://statsapi.mlb.com/api/v1';
 const PHILLIES_TEAM_ID = 143;
@@ -41,27 +41,27 @@ interface PlayerData {
 }
 
 interface BoxScoreResponse {
-  teams: {
-    home: {
-      team: {
-        name: string;
-      };
-      players: Record<string, PlayerData>;
-    };
-    away: {
-      team: {
-        name: string;
-      };
-      players: Record<string, PlayerData>;
-    };
-  };
-  gameData: {
-    datetime: {
-      dateTime: string;
-    };
-  };
   liveData: {
+    boxscore: {
+      teams: {
+        home: {
+          team: {
+            name: string;
+          };
+          players: Record<string, PlayerData>;
+        };
+        away: {
+          team: {
+            name: string;
+          };
+          players: Record<string, PlayerData>;
+        };
+      };
+    };
     linescore: {
+      currentInning: number;
+      inningState: string;
+      innings: InningData[];
       teams: {
         home: {
           runs: number;
@@ -124,6 +124,7 @@ export async function getRecentPhilliesGames(): Promise<Game[]> {
               homeScore: game.teams.home.score,
               awayScore: game.teams.away.score,
               status: game.status.detailedState,
+              gameLink: game.link, // Use the API link from schedule response
             });
           }
         }
@@ -138,20 +139,20 @@ export async function getRecentPhilliesGames(): Promise<Game[]> {
 }
 
 /**
- * Fetch and simplify game box score data
- * @param gamePk The game ID
- * @returns Simplified box score with team names and player stats
+ * Fetch game box score and linescore using the game feed link from schedule
+ * @param gameLink The game feed link from schedule response (e.g., "/api/v1.1/game/823483/feed/live")
+ * @returns Simplified box score with team names, player stats, and linescore
  */
-export async function getGameBoxScore(gamePk: number): Promise<GameBoxScore> {
+export async function getGameBoxScore(gameLink: string): Promise<GameBoxScore> {
   try {
-    const url = `${BASE_URL}/game/${gamePk}/boxscore`;
+    const url = `https://statsapi.mlb.com${gameLink}`;
     
     const response = await fetch(url, {
       next: { revalidate: 300 }, // Cache for 5 minutes
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch box score: ${response.statusText}`);
+      throw new Error(`Failed to fetch game data: ${response.statusText}`);
     }
 
     const data = await response.json() as BoxScoreResponse;
@@ -231,19 +232,31 @@ export async function getGameBoxScore(gamePk: number): Promise<GameBoxScore> {
       return stats;
     };
 
-    const homeTeam = data.teams?.home?.team?.name ?? 'Home Team';
-    const awayTeam = data.teams?.away?.team?.name ?? 'Away Team';
-    const homePlayers = extractPlayerStats(data.teams?.home?.players ?? {});
-    const awayPlayers = extractPlayerStats(data.teams?.away?.players ?? {});
+    const homeTeam = data.liveData?.boxscore?.teams?.home?.team?.name ?? 'Home Team';
+    const awayTeam = data.liveData?.boxscore?.teams?.away?.team?.name ?? 'Away Team';
+    const homePlayers = extractPlayerStats(data.liveData?.boxscore?.teams?.home?.players ?? {});
+    const awayPlayers = extractPlayerStats(data.liveData?.boxscore?.teams?.away?.players ?? {});
+
+    // Extract linescore for inning-by-inning display
+    let linescore: LineScore | undefined;
+    const linescoreData = data.liveData?.linescore;
+    if (linescoreData?.innings && Array.isArray(linescoreData.innings)) {
+      linescore = {
+        currentInning: linescoreData.currentInning ?? 0,
+        inningState: linescoreData.inningState ?? '',
+        innings: linescoreData.innings,
+      };
+    }
 
     return {
       homeTeam,
       awayTeam,
       homePlayers,
       awayPlayers,
+      linescore,
     };
   } catch (error) {
-    console.error('Error fetching game box score:', error);
+    console.error('Error fetching game data:', error);
     throw error;
   }
 }
