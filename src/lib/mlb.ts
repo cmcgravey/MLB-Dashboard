@@ -1,4 +1,4 @@
-import type { Game, Player, HittingStats, TeamStanding, GameBoxScore, PlayerStat, LineScore, InningData } from '@/types';
+import type { Game, Player, PlayerDetails, HittingStats, PitchingStats, TeamStanding, GameBoxScore, PlayerStat, LineScore, InningData } from '@/types';
 
 const BASE_URL = 'https://statsapi.mlb.com/api/v1';
 const PHILLIES_TEAM_ID = 143;
@@ -111,11 +111,19 @@ export async function getRecentPhilliesGames(): Promise<Game[]> {
     const data = await response.json();
     const games: Game[] = [];
 
-    // Flatten the nested structure
+    const isPostponed = (status: string) =>
+      status.toLowerCase().includes('postponed');
+
+    // Flatten the nested structure and preserve distinct schedule entries
     if (data.dates && Array.isArray(data.dates)) {
       for (const dateEntry of data.dates) {
         if (dateEntry.games && Array.isArray(dateEntry.games)) {
           for (const game of dateEntry.games) {
+            const status = game.status?.detailedState ?? '';
+            if (isPostponed(status)) {
+              continue;
+            }
+
             games.push({
               id: game.gamePk,
               date: game.gameDate,
@@ -123,8 +131,9 @@ export async function getRecentPhilliesGames(): Promise<Game[]> {
               awayTeam: game.teams.away.team.name,
               homeScore: game.teams.home.score,
               awayScore: game.teams.away.score,
-              status: game.status.detailedState,
-              gameLink: game.link, // Use the API link from schedule response
+              status,
+              gameLink: game.link,
+              listKey: `${game.gamePk}-${game.gameDate}`,
             });
           }
         }
@@ -287,6 +296,8 @@ export async function getPhilliesRoster(): Promise<Player[]> {
           id: entry.person.id,
           name: entry.person.fullName,
           position: entry.position.abbreviation,
+          jerseyNumber: entry.jerseyNumber,
+          status: entry.status?.description,
         });
       }
     }
@@ -322,17 +333,33 @@ export async function getPlayerHittingStats(
     const data = await response.json();
 
     // Extract hitting stats from the response
-    if (data.stats && Array.isArray(data.stats) && data.stats.length > 0) {
-      const stat = data.stats[0]?.splits?.[0]?.stat;
-
-      if (stat) {
-        return {
-          avg: stat.avg || '.000',
-          homeRuns: stat.homeRuns || 0,
-          rbi: stat.rbi || 0,
-          ops: stat.ops || '.000',
-        };
-      }
+    const stat = data.stats?.[0]?.splits?.[0]?.stat;
+    if (stat) {
+      return {
+        avg: stat.avg || '.000',
+        homeRuns: stat.homeRuns ?? 0,
+        rbi: stat.rbi ?? 0,
+        ops: stat.ops || '.000',
+        gamesPlayed: stat.gamesPlayed,
+        atBats: stat.atBats,
+        runs: stat.runs,
+        hits: stat.hits,
+        doubles: stat.doubles,
+        triples: stat.triples,
+        walks: stat.baseOnBalls,
+        strikeOuts: stat.strikeOuts,
+        stolenBases: stat.stolenBases,
+        obp: stat.obp,
+        slg: stat.slg,
+        plateAppearances: stat.plateAppearances,
+        totalBases: stat.totalBases,
+        babip: stat.babip,
+        groundOuts: stat.groundOuts,
+        airOuts: stat.airOuts,
+        groundOutsToAirouts: stat.groundOutsToAirouts,
+        caughtStealing: stat.caughtStealing,
+        stolenBasePercentage: stat.stolenBasePercentage,
+      };
     }
 
     // Return default stats if not found
@@ -344,6 +371,235 @@ export async function getPlayerHittingStats(
     };
   } catch (error) {
     console.error(`Error fetching stats for player ${playerId}:`, error);
+    throw error;
+  }
+}
+
+export async function getPlayerCareerHittingStats(
+  playerId: number
+): Promise<HittingStats> {
+  try {
+    const url = `${BASE_URL}/people/${playerId}/stats?stats=career&group=hitting`;
+    
+    const response = await fetch(url, {
+      next: { revalidate: 3600 }, // Cache for 1 hour - career stats don't change often
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch career stats: ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    const stat = data.stats?.[0]?.splits?.[0]?.stat;
+
+    if (stat) {
+      return {
+        avg: stat.avg || '.000',
+        homeRuns: stat.homeRuns ?? 0,
+        rbi: stat.rbi ?? 0,
+        ops: stat.ops || '.000',
+        gamesPlayed: stat.gamesPlayed,
+        atBats: stat.atBats,
+        runs: stat.runs,
+        hits: stat.hits,
+        doubles: stat.doubles,
+        triples: stat.triples,
+        walks: stat.baseOnBalls,
+        strikeOuts: stat.strikeOuts,
+        stolenBases: stat.stolenBases,
+        obp: stat.obp,
+        slg: stat.slg,
+        plateAppearances: stat.plateAppearances,
+        totalBases: stat.totalBases,
+        babip: stat.babip,
+        groundOuts: stat.groundOuts,
+        airOuts: stat.airOuts,
+        groundOutsToAirouts: stat.groundOutsToAirouts,
+        caughtStealing: stat.caughtStealing,
+        stolenBasePercentage: stat.stolenBasePercentage,
+      };
+    }
+
+    return {
+      avg: '.000',
+      homeRuns: 0,
+      rbi: 0,
+      ops: '.000',
+    };
+  } catch (error) {
+    console.error(`Error fetching career hitting stats for player ${playerId}:`, error);
+    throw error;
+  }
+}
+
+export async function getPlayerDetails(
+  playerId: number
+): Promise<PlayerDetails> {
+  try {
+    const url = `${BASE_URL}/people/${playerId}`;
+
+    const response = await fetch(url, {
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch player details: ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    const person = data.people?.[0];
+
+    if (!person) {
+      throw new Error(`Player ${playerId} not found`);
+    }
+
+    return {
+      id: person.id,
+      fullName: person.fullName,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      jerseyNumber: person.primaryNumber,
+      primaryPosition: person.primaryPosition?.name ?? 'Unknown',
+      currentTeam: person.currentTeam?.name ?? 'Philadelphia Phillies',
+      bats: person.batSide?.description ?? person.batSide?.code ?? 'N/A',
+      throws: person.pitchHand?.description ?? person.pitchHand?.code ?? 'N/A',
+      height: person.height ?? 'Unknown',
+      weight: person.weight ?? 0,
+      birthDate: person.birthDate ?? 'Unknown',
+      birthCity: person.birthCity ?? '',
+      birthStateProvince: person.birthStateProvince,
+      birthCountry: person.birthCountry ?? 'Unknown',
+      active: person.active ?? false,
+      rosterStatus: person.rosterStatus ?? 'Unknown',
+      mlbDebutDate: person.mlbDebutDate ?? 'N/A',
+      currentAge: person.currentAge ?? 0,
+    };
+  } catch (error) {
+    console.error(`Error fetching player details for ${playerId}:`, error);
+    throw error;
+  }
+}
+
+export async function getPlayerPitchingStats(
+  playerId: number
+): Promise<PitchingStats> {
+  try {
+    const url = `${BASE_URL}/people/${playerId}/stats?stats=season&group=pitching`;
+    
+    const response = await fetch(url, {
+      next: { revalidate: 300 }, // Cache for 5 minutes
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch player pitching stats: ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    const stat = data.stats?.[0]?.splits?.[0]?.stat;
+
+    if (stat) {
+      return {
+        gamesPlayed: stat.gamesPlayed ?? 0,
+        wins: stat.wins ?? 0,
+        losses: stat.losses ?? 0,
+        era: stat.era ?? '0.00',
+        gamesStarted: stat.gamesStarted ?? 0,
+        gamesFinished: stat.gamesFinished ?? 0,
+        saves: stat.saves ?? 0,
+        inningsPitched: stat.inningsPitched ?? '0.0',
+        strikeOuts: stat.strikeOuts ?? 0,
+        walks: stat.baseOnBalls ?? 0,
+        hits: stat.hits ?? 0,
+        earnedRuns: stat.earnedRuns ?? 0,
+        whip: stat.whip ?? '0.00',
+        pitchCount: stat.numberOfPitches ?? 0,
+      };
+    }
+
+    return {
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      era: '0.00',
+      gamesStarted: 0,
+      gamesFinished: 0,
+      saves: 0,
+      inningsPitched: '0.0',
+      strikeOuts: 0,
+      walks: 0,
+      hits: 0,
+      earnedRuns: 0,
+      whip: '0.00',
+      pitchCount: 0,
+    };
+  } catch (error) {
+    console.error(`Error fetching pitching stats for player ${playerId}:`, error);
+    throw error;
+  }
+}
+
+export async function getPlayerCareerPitchingStats(
+  playerId: number
+): Promise<PitchingStats> {
+  try {
+    const url = `${BASE_URL}/people/${playerId}/stats?stats=career&group=pitching`;
+    
+    const response = await fetch(url, {
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch career pitching stats: ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    const stat = data.stats?.[0]?.splits?.[0]?.stat;
+
+    if (stat) {
+      return {
+        gamesPlayed: stat.gamesPlayed ?? 0,
+        wins: stat.wins ?? 0,
+        losses: stat.losses ?? 0,
+        era: stat.era ?? '0.00',
+        gamesStarted: stat.gamesStarted ?? 0,
+        gamesFinished: stat.gamesFinished ?? 0,
+        saves: stat.saves ?? 0,
+        inningsPitched: stat.inningsPitched ?? '0.0',
+        strikeOuts: stat.strikeOuts ?? 0,
+        walks: stat.baseOnBalls ?? 0,
+        hits: stat.hits ?? 0,
+        earnedRuns: stat.earnedRuns ?? 0,
+        whip: stat.whip ?? '0.00',
+        pitchCount: stat.numberOfPitches ?? 0,
+      };
+    }
+
+    return {
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      era: '0.00',
+      gamesStarted: 0,
+      gamesFinished: 0,
+      saves: 0,
+      inningsPitched: '0.0',
+      strikeOuts: 0,
+      walks: 0,
+      hits: 0,
+      earnedRuns: 0,
+      whip: '0.00',
+      pitchCount: 0,
+    };
+  } catch (error) {
+    console.error(`Error fetching career pitching stats for player ${playerId}:`, error);
     throw error;
   }
 }

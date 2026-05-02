@@ -16,7 +16,7 @@ export function RecentGamesTab({ games, isLoading }: RecentGamesTabProps) {
   return (
     <Grid container spacing={3}>
       {[...games].reverse().map((game) => (
-        <Grid item xs={12} sm={6} md={3} key={game.id}>
+        <Grid item xs={12} sm={6} md={3} key={game.listKey}>
           <GameCard game={game} />
         </Grid>
       ))}

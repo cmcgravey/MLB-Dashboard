@@ -7,12 +7,37 @@ export interface Game {
   awayScore: number;
   status: string;
   gameLink: string; // API link from schedule response
+  listKey: string; // Unique key for rendering schedule entries
 }
 
 export interface Player {
   id: number;
   name: string;
   position: string;
+  jerseyNumber?: string;
+  status?: string;
+}
+
+export interface PlayerDetails {
+  id: number;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  jerseyNumber?: string;
+  primaryPosition: string;
+  currentTeam: string;
+  bats: string;
+  throws: string;
+  height: string;
+  weight: number;
+  birthDate: string;
+  birthCity: string;
+  birthStateProvince?: string;
+  birthCountry: string;
+  active: boolean;
+  rosterStatus: string;
+  mlbDebutDate: string;
+  currentAge: number;
 }
 
 export interface HittingStats {
@@ -20,6 +45,42 @@ export interface HittingStats {
   homeRuns: number;
   rbi: number;
   ops: string;
+  gamesPlayed?: number;
+  atBats?: number;
+  runs?: number;
+  hits?: number;
+  doubles?: number;
+  triples?: number;
+  walks?: number;
+  strikeOuts?: number;
+  stolenBases?: number;
+  obp?: string;
+  slg?: string;
+  plateAppearances?: number;
+  totalBases?: number;
+  babip?: string;
+  groundOuts?: number;
+  airOuts?: number;
+  groundOutsToAirouts?: string;
+  caughtStealing?: number;
+  stolenBasePercentage?: string;
+}
+
+export interface PitchingStats {
+  gamesPlayed?: number;
+  wins?: number;
+  losses?: number;
+  era?: string;
+  gamesStarted?: number;
+  gamesFinished?: number;
+  saves?: number;
+  inningsPitched?: string;
+  strikeOuts?: number;
+  walks?: number;
+  hits?: number;
+  earnedRuns?: number;
+  whip?: string;
+  pitchCount?: number;
 }
 
 export interface TeamStanding {
